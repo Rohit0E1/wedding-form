@@ -10,25 +10,36 @@ interface RequestBody {
 }
 
 export async function POST(request: NextRequest) {
+  // --- **NEW VALIDATION BLOCK STARTS HERE** ---
+  // These variables are checked on the server, so they are secure.
+  const { EMAIL_SERVER_HOST, EMAIL_SERVER_PORT, EMAIL_SERVER_USER, EMAIL_SERVER_PASSWORD, EMAIL_FROM } = process.env;
+
+  if (!EMAIL_SERVER_HOST || !EMAIL_SERVER_PORT || !EMAIL_SERVER_USER || !EMAIL_SERVER_PASSWORD || !EMAIL_FROM) {
+    console.error("Missing required environment variables for sending email.");
+    // Don't expose which variable is missing to the client.
+    return NextResponse.json({ message: "Server configuration error." }, { status: 500 });
+  }
+  // --- **NEW VALIDATION BLOCK ENDS HERE** ---
+
   try {
     const { name, phone, email, city, role } = await request.json() as RequestBody;
 
     if (!name || !phone || !city || !role) {
-      return NextResponse.json({ message: "Missing required fields" }, { status: 400 });
+      return NextResponse.json({ message: "Missing required form fields" }, { status: 400 });
     }
 
     const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_SERVER_HOST,
-      port: Number(process.env.EMAIL_SERVER_PORT),
+      host: EMAIL_SERVER_HOST,
+      port: Number(EMAIL_SERVER_PORT),
       secure: true,
       auth: {
-        user: process.env.EMAIL_SERVER_USER,
-        pass: process.env.EMAIL_SERVER_PASSWORD,
+        user: EMAIL_SERVER_USER,
+        pass: EMAIL_SERVER_PASSWORD,
       },
     });
 
     const mailOptions = {
-      from: `"Your Website" <${process.env.EMAIL_FROM}>`,
+      from: `"Your Website" <${EMAIL_FROM}>`,
       to: 'rohitkumar.0f1@gmail.com',
       subject: `New Wedding Inquiry from ${name}`,
       html: `
@@ -51,14 +62,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ message: "Email sent successfully!" }, { status: 200 });
 
-  } catch (error: any) {
-    // --- **IMPROVED LOGGING** ---
-    // We now log the specific error to the server console for better debugging.
-    console.error('--- EMAIL SENDING FAILED ---');
-    console.error(`Timestamp: ${new Date().toISOString()}`);
-    console.error(`Error: ${error.message}`);
-    console.error('-----------------------------');
-
-    return NextResponse.json({ message: "Failed to send email. Please check server logs." }, { status: 500 });
+  } catch (error) {
+    // Improved error handling
+    let errorMessage = "An unknown error occurred.";
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    console.error('API Error:', errorMessage);
+    return NextResponse.json({ message: "Failed to send email." }, { status: 500 });
   }
 }
